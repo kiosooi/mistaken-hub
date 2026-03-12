@@ -545,6 +545,64 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
+local UIS = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+
+local LungeEnabled = false
+local delayBeforePush = 0
+local cooldownTime = 30
+local pushPower = 120
+
+local canUse = true
+
+Tab:CreateToggle({
+    Name = "Dagger Lunge",
+    CurrentValue = false,
+    Callback = function(Value)
+        LungeEnabled = Value
+    end,
+})
+
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if not LungeEnabled then return end
+    if input.KeyCode ~= Enum.KeyCode.Q then return end
+    if not canUse then return end
+
+    local survivorsFolder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors")
+    if not survivorsFolder then return end
+
+    local validCharacter = false
+
+    for _, model in pairs(survivorsFolder:GetChildren()) do
+        if model:IsA("Model") and model.Name == "TwoTime" then
+            local username = model:GetAttribute("Username")
+            if username == player.Name then
+                validCharacter = true
+                break
+            end
+        end
+    end
+
+    if not validCharacter then return end
+
+    canUse = false
+
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart")
+
+    task.wait(delayBeforePush)
+
+    local forward = hrp.CFrame.LookVector
+    hrp.AssemblyLinearVelocity =
+        hrp.AssemblyLinearVelocity + (forward * pushPower)
+
+    task.wait(cooldownTime)
+    canUse = true
+end)
+
 local Section = Tab:CreateSection("Movement (Jane Doe)")
 
 local Players = game:GetService("Players")
