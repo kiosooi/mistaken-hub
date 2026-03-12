@@ -1,0 +1,830 @@
+-- Load Rayfield
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Generator UI",
+   LoadingTitle = "Loading...",
+   LoadingSubtitle = "Please wait",
+   ConfigurationSaving = { Enabled = false }
+})
+
+local PlayerTab = Window:CreateTab("Generators", 4483362458)
+
+-- VARIABLES
+local ActiveAutoGenerator = false
+local AutoGenDelay = 2.5
+local KeybindEnabled = false
+local KeybindCooldown = false
+local Keybind = "T"
+
+-- SERVICES
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+
+------------------------------------------------------------
+-- HIGHLIGHT + BILLBOARD HELPERS
+------------------------------------------------------------
+local function applyHighlight(obj, color)
+    if not obj:FindFirstChild("ESP_HIGHLIGHT") then
+        local h = Instance.new("Highlight")
+        h.Name = "ESP_HIGHLIGHT"
+        h.FillColor = color
+        h.FillTransparency = 0.4
+        h.OutlineColor = color
+        h.Parent = obj
+    end
+end
+
+local function removeHighlight(obj)
+    if obj:FindFirstChild("ESP_HIGHLIGHT") then
+        obj.ESP_HIGHLIGHT:Destroy()
+    end
+    if obj:FindFirstChild("ESP_BILLBOARD") then
+        obj.ESP_BILLBOARD:Destroy()
+    end
+end
+
+local function applyBillboard(obj, text)
+    if obj:FindFirstChild("ESP_BILLBOARD") then
+        obj.ESP_BILLBOARD.TextLabel.Text = text
+        return
+    end
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "ESP_BILLBOARD"
+    billboard.Size = UDim2.new(0,70,0,25)
+    billboard.Adornee = obj
+    billboard.AlwaysOnTop = true
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1,0,1,0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(255,255,255)
+    label.TextStrokeTransparency = 0
+    label.TextScaled = false
+    label.TextSize = 16
+    label.Text = text
+    label.Parent = billboard
+
+    billboard.Parent = obj
+end
+
+------------------------------------------------------------
+-- AUTO GENERATOR
+------------------------------------------------------------
+PlayerTab:CreateToggle({
+   Name = "Auto Generator",
+   CurrentValue = false,
+   Callback = function(Value)
+      ActiveAutoGenerator = Value
+      task.spawn(function()
+         while ActiveAutoGenerator do
+            local folder = Workspace.Map.Ingame:FindFirstChild("Map")
+            if folder then
+                for _, gen in pairs(folder:GetChildren()) do
+                    if gen:IsA("Model") and gen.Name == "Generator" then
+                        local r = gen:FindFirstChild("Remotes")
+                        if r and r:FindFirstChild("RE") then
+                            r.RE:FireServer()
+                        end
+                    end
+                end
+            end
+            task.wait(AutoGenDelay)
+         end
+      end)
+   end,
+})
+
+PlayerTab:CreateSlider({
+   Name = "Auto Generator Delay",
+   Range = {2.5, 8},
+   Increment = 0.1,
+   Suffix = "Sec",
+   CurrentValue = 2.5,
+   Callback = function(Value)
+      AutoGenDelay = Value
+   end,
+})
+
+------------------------------------------------------------
+-- KEYBIND GENERATOR
+------------------------------------------------------------
+PlayerTab:CreateToggle({
+   Name = "Generator Puzzle Keybind",
+   CurrentValue = false,
+   Callback = function(Value)
+      KeybindEnabled = Value
+   end,
+})
+
+PlayerTab:CreateInput({
+   Name = "Keybind",
+   CurrentValue = "T",
+   PlaceholderText = "Enter key...",
+   Callback = function(Text)
+      Keybind = Text
+   end,
+})
+
+UserInputService.InputBegan:Connect(function(input,gpe)
+   if gpe then return end
+   if KeybindEnabled and input.KeyCode == Enum.KeyCode[Keybind] then
+      if not KeybindCooldown then
+         KeybindCooldown = true
+
+         local folder = Workspace.Map.Ingame:FindFirstChild("Map")
+         if folder then
+            for _, gen in pairs(folder:GetChildren()) do
+                if gen:IsA("Model") and gen.Name == "Generator" then
+                    local r = gen:FindFirstChild("Remotes")
+                    if r and r:FindFirstChild("RE") then
+                        r.RE:FireServer()
+                    end
+                end
+            end
+         end
+
+         task.delay(2.5, function()
+            KeybindCooldown = false
+         end)
+      end
+   end
+end)
+
+local AutoFarm = false
+local player = game.Players.LocalPlayer
+
+local Section = PlayerTab:CreateSection("Auto Farm")
+
+PlayerTab:CreateToggle({
+   Name = "Auto Farm",
+   CurrentValue = false,
+   Callback = function(Value)
+      AutoFarm = Value
+
+      task.spawn(function()
+         while AutoFarm do
+
+            local myCharacter = nil
+            local survivors = workspace:WaitForChild("Players"):WaitForChild("Survivors")
+
+            -- find the survivor model that belongs to the LocalPlayer
+            for _, model in pairs(survivors:GetChildren()) do
+               if model:GetAttribute("Username") == player.Name then
+                  myCharacter = model
+                  break
+               end
+            end
+
+            if myCharacter then
+               local hrp = myCharacter:FindFirstChild("HumanoidRootPart")
+
+               if hrp then
+                  local mapFolder = workspace:WaitForChild("Map")
+                     :WaitForChild("Ingame")
+                     :WaitForChild("Map")
+
+                  for _, gen in pairs(mapFolder:GetChildren()) do
+                     if not AutoFarm then break end
+
+                     if gen:IsA("Model") and gen.Name == "Generator" then
+                        local progress = gen:FindFirstChild("Progress")
+
+                        if progress and progress.Value < 100 then
+
+                           if gen.PrimaryPart then
+                              hrp.CFrame = gen.PrimaryPart.CFrame * CFrame.new(0,0,-3)
+                           end
+
+                           task.wait(0.2)
+
+                           -- enter generator
+                           gen.Remotes.RF:InvokeServer("enter")
+
+                           task.wait(0.2)
+
+                           -- repair
+                           if gen.Remotes:FindFirstChild("RE") then
+                              gen.Remotes.RE:FireServer()
+                           end
+
+                           task.wait(0.2)
+
+                           -- leave generator
+                           gen.Remotes.RF:InvokeServer("leave")
+
+                           task.wait(0.2)
+                        end
+                     end
+                  end
+               end
+            end
+
+            task.wait(0.2)
+         end
+      end)
+   end,
+})
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local ResetAfterFarm = false
+
+PlayerTab:CreateToggle({
+    Name = "reset after auto farm is done",
+    CurrentValue = false,
+    Callback = function(Value)
+        ResetAfterFarm = Value
+
+        task.spawn(function()
+            while ResetAfterFarm do
+
+                local allDone = true
+                local mapFolder = workspace:WaitForChild("Map")
+                    :WaitForChild("Ingame")
+                    :WaitForChild("Map")
+
+                for _, gen in pairs(mapFolder:GetChildren()) do
+                    if gen:IsA("Model") and gen.Name == "Generator" then
+                        local progress = gen:FindFirstChild("Progress")
+
+                        if progress and progress.Value < 100 then
+                            allDone = false
+                            break
+                        end
+                    end
+                end
+
+                if allDone then
+                    local char = LocalPlayer.Character
+                    if char then
+                        char:BreakJoints()
+                    end
+                    break
+                end
+
+                task.wait(0.5)
+            end
+        end)
+    end,
+})
+
+------------------------------------------------------------
+-- VISUAL TAB
+------------------------------------------------------------
+local VisualTab = Window:CreateTab("Visual", 4483362458)
+
+local GeneratorESP = false
+local KillerESP = false
+local SurvivorESP = false
+local ItemESP = false
+
+------------------------------------------------------------
+-- GENERATOR ESP (BLUE)
+------------------------------------------------------------
+VisualTab:CreateToggle({
+   Name = "Generator ESP",
+   CurrentValue = false,
+   Callback = function(enabled)
+      GeneratorESP = enabled
+
+      if not enabled then
+         local folder = Workspace.Map.Ingame:FindFirstChild("Map")
+         if folder then
+            for _, gen in pairs(folder:GetChildren()) do
+                removeHighlight(gen)
+            end
+         end
+         return
+      end
+
+      task.spawn(function()
+         while GeneratorESP do
+            local folder = Workspace.Map.Ingame:FindFirstChild("Map")
+            if folder then
+                for _, gen in pairs(folder:GetChildren()) do
+                    if gen:IsA("Model") and gen.Name == "Generator" then
+                        applyHighlight(gen, Color3.fromRGB(0,162,255))
+
+                        local progress = gen:FindFirstChild("Progress")
+                        if progress and progress:IsA("NumberValue") then
+                            applyBillboard(gen, math.floor(progress.Value).."%")
+                        end
+                    end
+                end
+            end
+            task.wait(1)
+         end
+      end)
+   end,
+})
+
+------------------------------------------------------------
+-- KILLER ESP (RED)
+------------------------------------------------------------
+VisualTab:CreateToggle({
+   Name = "Killer ESP",
+   CurrentValue = false,
+   Callback = function(enabled)
+      KillerESP = enabled
+
+      if not enabled then
+         for _, k in pairs(Workspace.Players.Killers:GetChildren()) do
+            removeHighlight(k)
+         end
+         return
+      end
+
+      task.spawn(function()
+         while KillerESP do
+            for _, k in pairs(Workspace.Players.Killers:GetChildren()) do
+                applyHighlight(k, Color3.fromRGB(255,0,0))
+            end
+            task.wait(1)
+         end
+      end)
+   end,
+})
+
+------------------------------------------------------------
+-- SURVIVOR ESP (GREEN)
+------------------------------------------------------------
+VisualTab:CreateToggle({
+   Name = "Survivor ESP",
+   CurrentValue = false,
+   Callback = function(enabled)
+      SurvivorESP = enabled
+
+      if not enabled then
+         for _, s in pairs(Workspace.Players.Survivors:GetChildren()) do
+            removeHighlight(s)
+         end
+         return
+      end
+
+      task.spawn(function()
+         while SurvivorESP do
+            for _, s in pairs(Workspace.Players.Survivors:GetChildren()) do
+                applyHighlight(s, Color3.fromRGB(0,255,0))
+            end
+            task.wait(1)
+         end
+      end)
+   end,
+})
+
+------------------------------------------------------------
+-- ITEM ESP (CYAN) – FIXED
+------------------------------------------------------------
+VisualTab:CreateToggle({
+   Name = "Item ESP",
+   CurrentValue = false,
+   Callback = function(enabled)
+      ItemESP = enabled
+
+      local folder = Workspace.Map.Ingame:FindFirstChild("Map")
+      if not folder then return end
+
+      if not enabled then
+         for _, obj in pairs(folder:GetChildren()) do
+            if obj:IsA("Tool") then
+                removeHighlight(obj)
+            end
+         end
+         return
+      end
+
+      task.spawn(function()
+         while ItemESP do
+            for _, obj in pairs(folder:GetChildren()) do
+                if obj:IsA("Tool") and (obj.Name == "Medkit" or obj.Name == "BloxyCola") then
+                    applyHighlight(obj, Color3.fromRGB(0,255,255))
+                    applyBillboard(obj, obj.Name)
+                end
+            end
+            task.wait(1)
+         end
+      end)
+   end,
+})
+
+local Players = game:GetService("Players")
+local ChatService = game:GetService("Chat")
+local LocalPlayer = Players.LocalPlayer
+
+local ChatEnabled = false
+
+local Section = VisualTab:CreateSection("UI")
+
+local TextChatService = game:GetService("TextChatService")
+
+local ChatForceEnabled = false
+
+VisualTab:CreateToggle({
+    Name = "Force Chat Enabled",
+    CurrentValue = false,
+    Callback = function(Value)
+        ChatForceEnabled = Value
+
+        task.spawn(function()
+            while ChatForceEnabled do
+
+                local config = TextChatService:WaitForChild("ChatWindowConfiguration")
+
+                if config.Enabled == false then
+                    config.Enabled = true
+                end
+
+                task.wait(0.2)
+            end
+        end)
+    end,
+})
+
+local Tab = Window:CreateTab("survivor/killer buffs", 4483362458) -- Title, Image
+
+local UIS = game:GetService("UserInputService")
+local player = game.Players.LocalPlayer
+
+local LungeEnabled = false
+local delayBeforePush = 0.5
+local cooldownTime = 40
+local pushPower = 115
+local canUse = true
+
+local Section = Tab:CreateSection("Movement (Shedletsky)")
+
+Tab:CreateToggle({
+    Name = "Slash Lunge",
+    CurrentValue = false,
+    Callback = function(Value)
+        LungeEnabled = Value
+    end,
+})
+
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if not LungeEnabled then return end
+    if not canUse then return end
+    if input.KeyCode ~= Enum.KeyCode.Q then return end
+
+    local survivorsFolder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors")
+    if not survivorsFolder then return end
+
+    local myModel = nil
+
+    for _, model in pairs(survivorsFolder:GetChildren()) do
+        if model:IsA("Model") and model.Name == "Shedletsky" then
+            local username = model:GetAttribute("Username")
+            if username == player.Name then
+                myModel = model
+                break
+            end
+        end
+    end
+
+    -- no matching model, do nothing
+    if not myModel then return end
+
+    -- wait for HumanoidRootPart
+    local hrp = myModel:FindFirstChild("HumanoidRootPart") or myModel:WaitForChild("HumanoidRootPart", 2)
+    if not hrp then return end
+
+    canUse = false
+
+    task.spawn(function()
+        task.wait(delayBeforePush)
+
+        if hrp.Parent then -- ensure the model still exists
+            local forward = hrp.CFrame.LookVector
+            hrp.AssemblyLinearVelocity = hrp.AssemblyLinearVelocity + (forward * pushPower)
+        end
+
+        task.wait(cooldownTime)
+        canUse = true
+    end)
+end)
+
+local Section = Tab:CreateSection("Movement (Two Time)")
+
+local UIS = game:GetService("UserInputService")
+local player = game.Players.LocalPlayer
+
+local PushEnabled = false
+local PushKey = "V"
+
+Tab:CreateToggle({
+    Name = "Backward Push",
+    CurrentValue = false,
+    Callback = function(Value)
+        PushEnabled = Value
+    end,
+})
+
+Tab:CreateInput({
+    Name = "Push Key",
+    PlaceholderText = "Enter key (example: V)",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        PushKey = string.upper(Text)
+    end,
+})
+
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if not PushEnabled then return end
+
+    if input.KeyCode == Enum.KeyCode[PushKey] then
+        local char = player.Character or player.CharacterAdded:Wait()
+        local hrp = char:WaitForChild("HumanoidRootPart")
+
+        -- move 5 studs backward
+        hrp.CFrame = hrp.CFrame - (hrp.CFrame.LookVector * 10)
+    end
+end)
+
+local Section = Tab:CreateSection("Movement (Jane Doe)")
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+local SurvivorToggle = false
+
+Tab:CreateToggle({
+    Name = "Clean AxeMovement",
+    CurrentValue = false,
+    Callback = function(Value)
+        SurvivorToggle = Value
+    end,
+})
+
+task.spawn(function()
+    while true do
+        task.wait(0.5) -- loop interval
+        if not SurvivorToggle then continue end
+
+        local survivorsFolder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors")
+        if not survivorsFolder then continue end
+
+        local targetModel = nil
+
+        for _, model in pairs(survivorsFolder:GetChildren()) do
+            if model:IsA("Model") and model.Name == "JaneDoeNew" then
+                local username = model:GetAttribute("Username")
+                if username == player.Name then
+                    targetModel = model
+                    break
+                end
+            end
+        end
+
+        if not targetModel then continue end
+
+        local speedFolder = targetModel:FindFirstChild("SpeedMultipliers")
+        if not speedFolder then continue end
+
+        for _, val in pairs(speedFolder:GetChildren()) do
+            if val:IsA("NumberValue") and val.Name == "AxeMovement" then
+                val:Destroy()
+            end
+        end
+    end
+end)
+
+-- Movement (Noli) section
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+local voidrushcontrol = false
+
+local ORIGINAL_DASH_SPEED = 60
+local isOverrideActive = false
+local connection
+
+local Humanoid
+local HumanoidRootPart
+
+local function setupCharacter(character)
+    Humanoid = character:WaitForChild("Humanoid")
+    HumanoidRootPart = character:WaitForChild("HumanoidRootPart")
+end
+
+if LocalPlayer.Character then
+    setupCharacter(LocalPlayer.Character)
+end
+
+LocalPlayer.CharacterAdded:Connect(setupCharacter)
+
+local function startOverride()
+    if isOverrideActive then return end
+    isOverrideActive = true
+
+    connection = RunService.RenderStepped:Connect(function()
+        if not Humanoid or not HumanoidRootPart then return end
+
+        Humanoid.WalkSpeed = ORIGINAL_DASH_SPEED
+        Humanoid.AutoRotate = false
+
+        local direction = HumanoidRootPart.CFrame.LookVector
+        local horizontal = Vector3.new(direction.X, 0, direction.Z)
+
+        if horizontal.Magnitude > 0 then
+            Humanoid:Move(horizontal.Unit)
+        end
+    end)
+end
+
+local function stopOverride()
+    if not isOverrideActive then return end
+    isOverrideActive = false
+
+    if Humanoid then
+        Humanoid.WalkSpeed = 16
+        Humanoid.AutoRotate = true
+        Humanoid:Move(Vector3.new(0,0,0))
+    end
+
+    if connection then
+        connection:Disconnect()
+        connection = nil
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    if not voidrushcontrol then return end
+
+    local char = Humanoid and Humanoid.Parent
+    local voidRushState = char and char:GetAttribute("VoidRushState")
+
+    if voidRushState == "Dashing" then
+        startOverride()
+    else
+        stopOverride()
+    end
+end)
+
+-- Rayfield UI
+local Section = Tab:CreateSection("Movement (Noli)")
+
+Tab:CreateToggle({
+   Name = "Better Void Rush Control",
+   CurrentValue = false,
+   Callback = function(Value)
+        voidrushcontrol = Value
+
+        if not Value then
+            stopOverride()
+        end
+   end,
+})
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local SpeedStatusLoop = false
+
+Tab:CreateToggle({
+    Name = "Speed Status Creator",
+    CurrentValue = false,
+    Callback = function(Value)
+        SpeedStatusLoop = Value
+
+        task.spawn(function()
+            while SpeedStatusLoop do
+
+                local playersFolder = workspace:WaitForChild("Players")
+                local foldersToCheck = {
+                    playersFolder:WaitForChild("Survivors"),
+                    playersFolder:WaitForChild("Killers")
+                }
+
+                for _, folder in pairs(foldersToCheck) do
+                    for _, model in pairs(folder:GetChildren()) do
+
+                        local username = model:GetAttribute("Username")
+
+                        if username == LocalPlayer.Name then
+
+                            local speedFolder = model:FindFirstChild("SpeedMultipliers")
+                            if speedFolder then
+
+                                local dash = speedFolder:FindFirstChild("VoidRushDash")
+                                local speedStatus = speedFolder:FindFirstChild("SpeedStatus")
+
+                                if dash then
+                                    -- create if missing
+                                    if not speedStatus then
+                                        local newValue = Instance.new("NumberValue")
+                                        newValue.Name = "SpeedStatus"
+                                        newValue.Value = 1.6
+                                        newValue.Parent = speedFolder
+                                    end
+                                else
+                                    -- delete if dash gone
+                                    if speedStatus then
+                                        speedStatus:Destroy()
+                                    end
+                                end
+
+                            end
+
+                        end
+                    end
+                end
+
+                task.wait(0.2)
+            end
+        end)
+    end,
+})
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local LaunchEnabled = false
+local LaunchKey = "C"
+
+Tab:CreateToggle({
+    Name = "launch up",
+    CurrentValue = false,
+    Callback = function(Value)
+        LaunchEnabled = Value
+    end,
+})
+
+Tab:CreateInput({
+    Name = "Launch Key",
+    PlaceholderText = "Enter key (example: C)",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        LaunchKey = string.upper(Text)
+    end,
+})
+
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if not LaunchEnabled then return end
+
+    if input.KeyCode == Enum.KeyCode[LaunchKey] then
+
+        local char = LocalPlayer.Character
+        if not char then return end
+
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        -- upward push (~50 studs jump)
+        hrp.AssemblyLinearVelocity =
+            hrp.AssemblyLinearVelocity + Vector3.new(0,70,0)
+
+    end
+end)
+
+local SurvivorGlobalEnabled = false
+local player = game.Players.LocalPlayer
+
+local SurvivorGlobalSection = Tab:CreateSection("Survivor global")
+
+Tab:CreateToggle({
+    Name = "Global SpeedStatus",
+    CurrentValue = false,
+    Callback = function(Value)
+        SurvivorGlobalEnabled = Value
+
+        task.spawn(function()
+            while SurvivorGlobalEnabled do
+
+                local survivors = workspace:WaitForChild("Players"):WaitForChild("Survivors")
+
+                for _, model in pairs(survivors:GetChildren()) do
+                    if model:GetAttribute("Username") == player.Name then
+
+                        local speedFolder = model:FindFirstChild("SpeedMultipliers")
+
+                        if speedFolder then
+                            local speedStatus = speedFolder:FindFirstChild("SpeedStatus")
+
+                            if not speedStatus then
+                                speedStatus = Instance.new("NumberValue")
+                                speedStatus.Name = "SpeedStatus"
+                                speedStatus.Value = 1.2
+                                speedStatus.Parent = speedFolder
+                            else
+                                if speedStatus.Value ~= 1.2 then
+                                    speedStatus.Value = 1.2
+                                end
+                            end
+                        end
+                    end
+                end
+
+                task.wait(0.1)
+            end
+        end)
+    end,
+})
