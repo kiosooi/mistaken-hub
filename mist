@@ -1,4 +1,4 @@
--- Load Rayfield
+-- Load Rayfield 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
@@ -541,7 +541,7 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
         local hrp = char:WaitForChild("HumanoidRootPart")
 
         -- move 5 studs backward
-        hrp.CFrame = hrp.CFrame - (hrp.CFrame.LookVector * 10)
+        hrp.CFrame = hrp.CFrame - (hrp.CFrame.LookVector * 20)
     end
 end)
 
@@ -602,6 +602,106 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
     task.wait(cooldownTime)
     canUse = true
 end)
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+local connection = nil
+
+Tab:CreateToggle({
+    Name = "Faster Crouch Speed",
+    CurrentValue = false,
+    Flag = "FasterCrouch",
+    Callback = function(Value)
+        if Value then
+            connection = RunService.Heartbeat:Connect(function()
+                local survivors = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors")
+                if not survivors then return end
+
+                local model = survivors:FindFirstChild("TwoTime")
+                if not model then return end
+
+                if model:GetAttribute("Username") ~= LocalPlayer.Name then return end
+
+                local speedFolder = model:FindFirstChild("SpeedMultipliers")
+                if not speedFolder then return end
+
+                local crouch = speedFolder:FindFirstChild("TwoTimeCrouching")
+                if crouch then
+                    crouch.Value = 1.5
+                end
+            end)
+        else
+            if connection then connection:Disconnect() connection = nil end
+        end
+    end,
+})
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+local connection = nil
+local onCooldown = false
+
+Tab:CreateToggle({
+    Name = "Auto Backstab",
+    CurrentValue = false,
+    Flag = "AutoBackstab",
+    Callback = function(Value)
+        if Value then
+            connection = RunService.Heartbeat:Connect(function()
+                if onCooldown then return end
+
+                local char = LocalPlayer.Character
+                if not char then return end
+
+                local rootPart = char:FindFirstChild("HumanoidRootPart")
+                if not rootPart then return end
+
+                local playersFolder = workspace:FindFirstChild("Players")
+                if not playersFolder then return end
+
+                local survivors = playersFolder:FindFirstChild("Survivors")
+                local killers = playersFolder:FindFirstChild("Killers")
+                if not (survivors and killers) then return end
+
+                local myModel = survivors:FindFirstChild("TwoTime")
+                if not myModel then return end
+                if myModel:GetAttribute("Username") ~= LocalPlayer.Name then return end
+
+                local speedFolder = myModel:FindFirstChild("SpeedMultipliers")
+                if not speedFolder then return end
+
+                local stab = speedFolder:FindFirstChild("TwoTimeStab")
+                if not stab then return end
+
+                for _, killer in pairs(killers:GetChildren()) do
+                    local kRoot = killer:FindFirstChild("HumanoidRootPart")
+                    if kRoot then
+                        local dist = (kRoot.Position - rootPart.Position).Magnitude
+                        if dist <= 35 then
+                            -- teleport behind killer
+                            local behind = kRoot.CFrame.LookVector * -10
+                            rootPart.CFrame = CFrame.new(kRoot.Position + behind, kRoot.Position)
+
+                            onCooldown = true
+                            task.delay(3, function()
+                                onCooldown = false
+                            end)
+
+                            break
+                        end
+                    end
+                end
+            end)
+        else
+            if connection then connection:Disconnect() connection = nil end
+            onCooldown = false
+        end
+    end,
+})
 
 local Section = Tab:CreateSection("Movement (Jane Doe)")
 
