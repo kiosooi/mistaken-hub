@@ -1,4 +1,4 @@
--- Load Rayfield 
+-- Load Rayfield JoySlowness
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
@@ -443,15 +443,152 @@ VisualTab:CreateToggle({
     end,
 })
 
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+local connection = nil
+local screenGui = nil
+local customLabel = nil
+
+VisualTab:CreateToggle({
+    Name = "CenterStaminaCounter glitched effect Bypass",
+    CurrentValue = false,
+    Flag = "StaminaUIFix",
+    Callback = function(Value)
+        if Value then
+            connection = RunService.RenderStepped:Connect(function()
+                local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+                if not playerGui then return end
+
+                -- create UI once
+                if not screenGui or not screenGui.Parent then
+                    screenGui = Instance.new("ScreenGui")
+                    screenGui.Name = "CustomStaminaUI"
+                    screenGui.Parent = playerGui
+                    screenGui.ResetOnSpawn = false
+
+                    customLabel = Instance.new("TextLabel")
+                    customLabel.Parent = screenGui
+
+                    customLabel.BackgroundTransparency = 1
+                    customLabel.Size = UDim2.new(0.07, 0, 0.07, 0)
+                    customLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
+                    customLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+
+                    customLabel.TextScaled = false
+                    customLabel.TextSize = 28
+                    customLabel.Font = Enum.Font.SourceSansBold
+
+                    customLabel.TextXAlignment = Enum.TextXAlignment.Center
+                    customLabel.TextYAlignment = Enum.TextYAlignment.Center
+                end
+
+                -- get stamina
+                local ui = playerGui:FindFirstChild("TemporaryUI")
+                if not ui then return end
+
+                local staminaLabel = ui:FindFirstChild("PlayerInfo")
+                    and ui.PlayerInfo:FindFirstChild("Bars")
+                    and ui.PlayerInfo.Bars:FindFirstChild("Stamina")
+                    and ui.PlayerInfo.Bars.Stamina:FindFirstChild("Amount")
+
+                if not staminaLabel or not staminaLabel:IsA("TextLabel") then return end
+
+                local text = staminaLabel.Text
+                local number = string.match(text, "^(%d+)")
+                local value = tonumber(number)
+
+                if value then
+                    customLabel.Text = tostring(value)
+
+                    -- 🎨 COLOR LOGIC
+                    if value > 75 then
+                        customLabel.TextColor3 = Color3.fromRGB(0, 255, 0) -- green
+                    elseif value > 50 then
+                        customLabel.TextColor3 = Color3.fromRGB(255, 255, 0) -- yellow
+                    elseif value > 25 then
+                        customLabel.TextColor3 = Color3.fromRGB(255, 165, 0) -- orange
+                    else
+                        customLabel.TextColor3 = Color3.fromRGB(255, 0, 0) -- red
+                    end
+                end
+            end)
+        else
+            if connection then
+                connection:Disconnect()
+                connection = nil
+            end
+
+            if screenGui then
+                screenGui:Destroy()
+                screenGui = nil
+                customLabel = nil
+            end
+        end
+    end,
+})
+
 local Tab = Window:CreateTab("survivor/killer buffs", 4483362458) -- Title, Image
+
+
+local Section = Tab:CreateSection("Movement (Noob)")
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+local connection = nil
+local myModel = nil
+
+local function getMyModel()
+    local survivors = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors")
+    if not survivors then return nil end
+
+    for _, model in pairs(survivors:GetChildren()) do
+        if model:GetAttribute("Username") == LocalPlayer.Name then
+            return model
+        end
+    end
+end
+
+Tab:CreateToggle({
+    Name = "Speed 3 Bloxy Cola",
+    CurrentValue = false,
+    Flag = "SpeedStatusOverride",
+    Callback = function(Value)
+        if Value then
+            connection = RunService.Heartbeat:Connect(function()
+                -- reacquire model if needed
+                if not myModel or not myModel.Parent then
+                    myModel = getMyModel()
+                end
+                if not myModel then return end
+
+                local speedFolder = myModel:FindFirstChild("SpeedMultipliers")
+                if not speedFolder then return end
+
+                local speedStatus = speedFolder:FindFirstChild("SpeedStatus")
+                if not speedStatus then return end
+
+                if speedStatus.Value == 1.1 then
+                    speedStatus.Value = 1.3
+                end
+            end)
+        else
+            if connection then connection:Disconnect() connection = nil end
+            myModel = nil
+        end
+    end,
+})
 
 local UIS = game:GetService("UserInputService")
 local player = game.Players.LocalPlayer
 
 local LungeEnabled = false
-local delayBeforePush = 0.5
+local delayBeforePush = 0.6
 local cooldownTime = 40
-local pushPower = 115
+local pushPower = 120
 local canUse = true
 
 local Section = Tab:CreateSection("Movement (Shedletsky)")
@@ -507,6 +644,131 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
     end)
 end)
 
+------------------------------------------------------------
+-- HRP AUTO AIM (SHEDLETSKY STUN CHECK)
+------------------------------------------------------------
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+
+local ToggleEnabled = false
+local aimConnection
+local PredictionAmount = 0
+
+Tab:CreateToggle({
+    Name = "Auto Aim (Shedletsky Stun)",
+    CurrentValue = false,
+    Callback = function(Value)
+        ToggleEnabled = Value
+
+        if ToggleEnabled then
+            aimConnection = RunService.RenderStepped:Connect(function()
+
+                local char = LocalPlayer.Character
+                if not char then return end
+
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if not hrp then return end
+
+                local playersFolder = workspace:FindFirstChild("Players")
+                if not playersFolder then return end
+
+                local survivors = playersFolder:FindFirstChild("Survivors")
+                local killers = playersFolder:FindFirstChild("Killers")
+
+                if not survivors or not killers then return end
+
+                ------------------------------------------------
+                -- FIND YOUR SHEDLETSKY MODEL
+                ------------------------------------------------
+                local valid = false
+
+                for _, model in pairs(survivors:GetChildren()) do
+                    if model:IsA("Model") and model.Name == "Shedletsky" then
+                        local username = model:GetAttribute("Username")
+
+                        if username == LocalPlayer.Name then
+                            local speedFolder = model:FindFirstChild("SpeedMultipliers")
+
+                            if speedFolder then
+                                local stunValue = speedFolder:FindFirstChild("StunningKiller")
+
+                                if stunValue and stunValue:IsA("NumberValue") then
+                                    valid = true
+                                end
+                            end
+                        end
+                    end
+                end
+
+                if not valid then return end
+
+                ------------------------------------------------
+                -- FIND NEAREST KILLER
+                ------------------------------------------------
+                local nearestChar = nil
+                local shortestDistance = math.huge
+
+                for _, killer in pairs(killers:GetChildren()) do
+                    if killer:IsA("Model") then
+                        local targetHRP = killer:FindFirstChild("HumanoidRootPart")
+                        if targetHRP then
+                            local distance = (targetHRP.Position - hrp.Position).Magnitude
+
+                            if distance < shortestDistance then
+                                shortestDistance = distance
+                                nearestChar = killer
+                            end
+                        end
+                    end
+                end
+
+                ------------------------------------------------
+                -- AIM
+                ------------------------------------------------
+                if nearestChar then
+                    local targetHRP = nearestChar:FindFirstChild("HumanoidRootPart")
+                    if targetHRP then
+                        local predictedPos =
+                            targetHRP.Position +
+                            (targetHRP.AssemblyLinearVelocity * PredictionAmount)
+
+                        local direction = predictedPos - hrp.Position
+                        direction = Vector3.new(direction.X, 0, direction.Z)
+
+                        if direction.Magnitude > 0 then
+                            hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + direction)
+                        end
+                    end
+                end
+
+            end)
+        else
+            if aimConnection then
+                aimConnection:Disconnect()
+                aimConnection = nil
+            end
+        end
+    end,
+})
+
+------------------------------------------------------------
+-- PREDICTION SLIDER
+------------------------------------------------------------
+
+Tab:CreateSlider({
+   Name = "Aim Prediction",
+   Range = {0, 2},
+   Increment = 0.05,
+   Suffix = "s",
+   CurrentValue = 0,
+   Callback = function(Value)
+      PredictionAmount = Value
+   end,
+})
+
 local Section = Tab:CreateSection("Movement (Two Time)")
 
 local UIS = game:GetService("UserInputService")
@@ -553,7 +815,7 @@ local player = Players.LocalPlayer
 local LungeEnabled = false
 local delayBeforePush = 0
 local cooldownTime = 30
-local pushPower = 120
+local pushPower = 155
 
 local canUse = true
 
@@ -608,6 +870,18 @@ local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 
 local connection = nil
+local myModel = nil
+
+local function getMyModel()
+    local survivors = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors")
+    if not survivors then return nil end
+
+    for _, model in pairs(survivors:GetChildren()) do
+        if model:GetAttribute("Username") == LocalPlayer.Name then
+            return model
+        end
+    end
+end
 
 Tab:CreateToggle({
     Name = "Faster Crouch Speed",
@@ -616,15 +890,13 @@ Tab:CreateToggle({
     Callback = function(Value)
         if Value then
             connection = RunService.Heartbeat:Connect(function()
-                local survivors = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors")
-                if not survivors then return end
+                -- reacquire if missing
+                if not myModel or not myModel.Parent then
+                    myModel = getMyModel()
+                end
+                if not myModel then return end
 
-                local model = survivors:FindFirstChild("TwoTime")
-                if not model then return end
-
-                if model:GetAttribute("Username") ~= LocalPlayer.Name then return end
-
-                local speedFolder = model:FindFirstChild("SpeedMultipliers")
+                local speedFolder = myModel:FindFirstChild("SpeedMultipliers")
                 if not speedFolder then return end
 
                 local crouch = speedFolder:FindFirstChild("TwoTimeCrouching")
@@ -634,6 +906,7 @@ Tab:CreateToggle({
             end)
         else
             if connection then connection:Disconnect() connection = nil end
+            myModel = nil
         end
     end,
 })
@@ -643,7 +916,21 @@ local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 
 local connection = nil
+local aimConnection = nil
+
+local myModel = nil
 local onCooldown = false
+
+local function getMyModel()
+    local survivors = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors")
+    if not survivors then return nil end
+
+    for _, model in pairs(survivors:GetChildren()) do
+        if model:GetAttribute("Username") == LocalPlayer.Name then
+            return model
+        end
+    end
+end
 
 Tab:CreateToggle({
     Name = "Auto Backstab",
@@ -654,22 +941,14 @@ Tab:CreateToggle({
             connection = RunService.Heartbeat:Connect(function()
                 if onCooldown then return end
 
-                local char = LocalPlayer.Character
-                if not char then return end
-
-                local rootPart = char:FindFirstChild("HumanoidRootPart")
-                if not rootPart then return end
-
-                local playersFolder = workspace:FindFirstChild("Players")
-                if not playersFolder then return end
-
-                local survivors = playersFolder:FindFirstChild("Survivors")
-                local killers = playersFolder:FindFirstChild("Killers")
-                if not (survivors and killers) then return end
-
-                local myModel = survivors:FindFirstChild("TwoTime")
+                -- reacquire model
+                if not myModel or not myModel.Parent then
+                    myModel = getMyModel()
+                end
                 if not myModel then return end
-                if myModel:GetAttribute("Username") ~= LocalPlayer.Name then return end
+
+                local rootPart = myModel:FindFirstChild("HumanoidRootPart")
+                if not rootPart then return end
 
                 local speedFolder = myModel:FindFirstChild("SpeedMultipliers")
                 if not speedFolder then return end
@@ -677,16 +956,37 @@ Tab:CreateToggle({
                 local stab = speedFolder:FindFirstChild("TwoTimeStab")
                 if not stab then return end
 
+                local killers = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Killers")
+                if not killers then return end
+
                 for _, killer in pairs(killers:GetChildren()) do
                     local kRoot = killer:FindFirstChild("HumanoidRootPart")
                     if kRoot then
                         local dist = (kRoot.Position - rootPart.Position).Magnitude
-                        if dist <= 35 then
-                            -- teleport behind killer
-                            local behind = kRoot.CFrame.LookVector * -10
+
+                        if dist <= 50 then
+                            -- teleport behind
+                            local behind = kRoot.CFrame.LookVector * -15
                             rootPart.CFrame = CFrame.new(kRoot.Position + behind, kRoot.Position)
 
                             onCooldown = true
+
+                            -- aim lock
+                            local start = tick()
+                            if aimConnection then aimConnection:Disconnect() end
+
+                            aimConnection = RunService.Heartbeat:Connect(function()
+                                if not rootPart.Parent then return end
+
+                                if tick() - start >= 1 or not stab.Parent then
+                                    aimConnection:Disconnect()
+                                    aimConnection = nil
+                                    return
+                                end
+
+                                rootPart.CFrame = CFrame.new(rootPart.Position, kRoot.Position)
+                            end)
+
                             task.delay(3, function()
                                 onCooldown = false
                             end)
@@ -698,6 +998,8 @@ Tab:CreateToggle({
             end)
         else
             if connection then connection:Disconnect() connection = nil end
+            if aimConnection then aimConnection:Disconnect() aimConnection = nil end
+            myModel = nil
             onCooldown = false
         end
     end,
@@ -750,6 +1052,232 @@ task.spawn(function()
         end
     end
 end)
+
+local Section = Tab:CreateSection("Movement (Sancho)")
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+
+local canUse = true
+
+local delayBeforePush = 0.7
+local cooldownTime = 30
+local pushPower = 235
+
+local function getMyModel()
+    local killers = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Killers")
+    if not killers then return nil end
+
+    for _, model in pairs(killers:GetChildren()) do
+        if model:GetAttribute("Username") == LocalPlayer.Name then
+            return model
+        end
+    end
+end
+
+local inputConnection = nil
+
+Tab:CreateToggle({
+    Name = "JoySlowness Lunge",
+    CurrentValue = false,
+    Flag = "JoyLunge",
+    Callback = function(Value)
+
+        if Value then
+            inputConnection = UserInputService.InputBegan:Connect(function(input, gpe)
+                if gpe then return end
+                if input.KeyCode ~= Enum.KeyCode.Q then return end
+                if not canUse then return end
+
+                local myModel = getMyModel()
+                if not myModel then return end
+
+                local hrp = myModel:FindFirstChild("HumanoidRootPart")
+                if not hrp then return end
+
+                canUse = false
+
+                task.spawn(function()
+                    -- 🛑 STOP ANY EXISTING MOVEMENT (important)
+                    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+
+                    task.wait(delayBeforePush)
+
+                    -- 🔄 RE-GET HRP AFTER DELAY
+                    local newModel = getMyModel()
+                    local newHRP = newModel and newModel:FindFirstChild("HumanoidRootPart")
+
+                    if newHRP and newHRP.Parent then
+                        local forward = newHRP.CFrame.LookVector
+
+                        -- 💥 ACTUAL LUNGE AFTER DELAY
+                        newHRP.AssemblyLinearVelocity =
+                            (forward * pushPower) + Vector3.new(0, 25, 0)
+                    end
+
+                    task.wait(cooldownTime)
+                    canUse = true
+                end)
+            end)
+
+        else
+            if inputConnection then
+                inputConnection:Disconnect()
+                inputConnection = nil
+            end
+
+            canUse = true
+        end
+    end,
+})
+
+local targetMode = "Nearest"
+
+local RunService = game:GetService("RunService")
+
+local aimConnection = nil
+
+local function getMyModel()
+    local killers = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Killers")
+    if not killers then return nil end
+
+    for _, model in pairs(killers:GetChildren()) do
+        if model:GetAttribute("Username") == LocalPlayer.Name then
+            return model
+        end
+    end
+end
+
+local function getTarget()
+    local survivors = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors")
+    if not survivors then return nil end
+
+    local best = nil
+
+    for _, model in pairs(survivors:GetChildren()) do
+        local hrp = model:FindFirstChild("HumanoidRootPart")
+        local hum = model:FindFirstChild("Humanoid")
+
+        if hrp and hum then
+            if not best then
+                best = model
+            else
+                if targetMode == "Nearest" then
+                    local myHRP = getMyModel() and getMyModel():FindFirstChild("HumanoidRootPart")
+                    if myHRP then
+                        if (hrp.Position - myHRP.Position).Magnitude <
+                           (best.HumanoidRootPart.Position - myHRP.Position).Magnitude then
+                            best = model
+                        end
+                    end
+                elseif targetMode == "Lowest HP" then
+                    if hum.Health < best.Humanoid.Health then
+                        best = model
+                    end
+                elseif targetMode == "Highest HP" then
+                    if hum.Health > best.Humanoid.Health then
+                        best = model
+                    end
+                end
+            end
+        end
+    end
+
+    return best
+end
+
+Tab:CreateToggle({
+    Name = "Joy HRP Aim",
+    CurrentValue = false,
+    Flag = "JoyAim",
+    Callback = function(Value)
+        if Value then
+            aimConnection = RunService.Heartbeat:Connect(function()
+                local myModel = getMyModel()
+                if not myModel then return end
+
+                local speedFolder = myModel:FindFirstChild("SpeedMultipliers")
+                if not speedFolder then return end
+
+                local joy = speedFolder:FindFirstChild("JoySlowness")
+                if not joy then return end
+
+                local myHRP = myModel:FindFirstChild("HumanoidRootPart")
+                if not myHRP then return end
+
+                local target = getTarget()
+                if not target then return end
+
+                local targetHRP = target:FindFirstChild("HumanoidRootPart")
+                if not targetHRP then return end
+
+                -- AIM
+                myHRP.CFrame = CFrame.new(myHRP.Position, targetHRP.Position)
+            end)
+        else
+            if aimConnection then
+                aimConnection:Disconnect()
+                aimConnection = nil
+            end
+        end
+    end,
+})
+
+Tab:CreateDropdown({
+    Name = "Joy Target Mode",
+    Options = {"Nearest", "Lowest HP", "Highest HP"},
+    CurrentOption = "Nearest",
+    Callback = function(Option)
+        targetMode = Option
+    end,
+})
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+local connection = nil
+local myModel = nil
+
+local function getMyModel()
+    local killers = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Killers")
+    if not killers then return nil end
+
+    for _, model in pairs(killers:GetChildren()) do
+        if model:GetAttribute("Username") == LocalPlayer.Name then
+            return model
+        end
+    end
+end
+
+Tab:CreateToggle({
+    Name = "Sancho faster Joy",
+    CurrentValue = false,
+    Flag = "JoySlownessOverride",
+    Callback = function(Value)
+        if Value then
+            connection = RunService.Heartbeat:Connect(function()
+                -- reacquire model if needed
+                if not myModel or not myModel.Parent then
+                    myModel = getMyModel()
+                end
+                if not myModel then return end
+
+                local speedFolder = myModel:FindFirstChild("SpeedMultipliers")
+                if not speedFolder then return end
+
+                local joy = speedFolder:FindFirstChild("JoySlowness")
+                if joy then
+                    joy.Value = 1.2
+                end
+            end)
+        else
+            if connection then connection:Disconnect() connection = nil end
+            myModel = nil
+        end
+    end,
+})
 
 -- Movement (Noli) section
 local RunService = game:GetService("RunService")
