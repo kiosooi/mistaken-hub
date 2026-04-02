@@ -1005,6 +1005,220 @@ Tab:CreateToggle({
     end,
 })
 
+local Section = Tab:CreateSection("Movement (Guest 1337)")
+
+-- ================= AUTO BLOCK (ANIMATION) =================
+
+-- SETTINGS
+local AutoBlock = false
+local CheckLook = false
+local ShowRange = false
+
+local Distance = 15
+local Delay = 0
+
+local COOLDOWN = 1 -- 1 second cooldown
+local lastUse = 0
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local localPlayer = Players.LocalPlayer
+
+-- REMOTE
+local remote = ReplicatedStorage:WaitForChild("Modules")
+	:WaitForChild("Network")
+	:WaitForChild("RemoteEvent")
+
+-- TARGET ANIMS
+local TARGET_ANIMATIONS = {
+    ["rbxassetid://127250105740178"] = true,
+    ["rbxassetid://98442129458405"] = true,
+    ["rbxassetid://97674076669204"] = true,
+    ["rbxassetid://107320739034355"] = true,
+    ["rbxassetid://107423454821472"] = true,
+    ["rbxassetid://118361488485262"] = true,
+    ["rbxassetid://111832783209375"] = true,
+    ["rbxassetid://77062690261001"] = true,
+    ["rbxassetid://95122805708757"] = true,
+    ["rbxassetid://106200881152412"] = true,
+	["rbxassetid://79165858177718"] = true,
+	["rbxassetid://121025722366061"] = true,
+	["rbxassetid://100524721802667"] = true,
+}
+
+-- GET KILLER MODEL
+local function getKillerModel()
+	local killersFolder = workspace:FindFirstChild("Players")
+		and workspace.Players:FindFirstChild("Killers")
+	if not killersFolder then return end
+	return killersFolder:FindFirstChildOfClass("Model")
+end
+
+-- CHECK LOOKING
+local function isKillerLookingAtYou()
+	if not CheckLook then return true end
+	local myChar = localPlayer.Character
+	if not myChar then return false end
+	local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+	if not myRoot then return false end
+
+	local killerModel = getKillerModel()
+	if not killerModel then return false end
+	local killerRoot = killerModel:FindFirstChild("HumanoidRootPart")
+	if not killerRoot then return false end
+
+	local direction = (myRoot.Position - killerRoot.Position).Unit
+	local dot = killerRoot.CFrame.LookVector:Dot(direction)
+	return dot > 0.7
+end
+
+-- USE ABILITY
+local function useAbility()
+	local args = {
+		"UseActorAbility",
+		{
+			buffer.fromstring("\"Block\"")
+		}
+	}
+	remote:FireServer(unpack(args))
+end
+
+-- RANGE VISUAL
+local rangePart
+local function updateRange()
+	if not ShowRange then
+		if rangePart then rangePart:Destroy() rangePart = nil end
+		return
+	end
+
+	if not rangePart then
+		rangePart = Instance.new("Part")
+		rangePart.Shape = Enum.PartType.Cylinder
+		rangePart.Anchored = true
+		rangePart.CanCollide = false
+		rangePart.Transparency = 0.8
+		rangePart.Color = Color3.fromRGB(0,255,0)
+		rangePart.Material = Enum.Material.Neon
+		rangePart.Parent = workspace
+	end
+
+	local char = localPlayer.Character
+	if char and char:FindFirstChild("HumanoidRootPart") then
+		local root = char.HumanoidRootPart
+		rangePart.Size = Vector3.new(0.2, Distance*2, Distance*2)
+		rangePart.CFrame = root.CFrame * CFrame.Angles(0,0,math.rad(90))
+	end
+end
+
+-- ANIMATION MONITOR
+local function monitorCharacter(char)
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	humanoid.AnimationPlayed:Connect(function(track)
+		if not AutoBlock then return end
+		if not track.Animation then return end
+		
+		local animId = track.Animation.AnimationId
+		if not TARGET_ANIMATIONS[animId] then return end
+		
+		local myChar = localPlayer.Character
+		if not myChar then return end
+		
+		local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+		local otherRoot = char:FindFirstChild("HumanoidRootPart")
+		if not myRoot or not otherRoot then return end
+		
+		local distance = (myRoot.Position - otherRoot.Position).Magnitude
+		if distance > Distance then return end
+		
+		if not isKillerLookingAtYou() then return end
+		
+		if tick() - lastUse < COOLDOWN then return end
+		lastUse = tick()
+		
+		task.delay(Delay, function()
+			print("🛡️ ANIMATION DETECTED → BLOCK")
+			useAbility()
+		end)
+	end)
+end
+
+-- PLAYER SETUP
+local function setupPlayer(player)
+	if player == localPlayer then return end
+	
+	if player.Character then
+		monitorCharacter(player.Character)
+	end
+	
+	player.CharacterAdded:Connect(monitorCharacter)
+end
+
+for _, player in pairs(Players:GetPlayers()) do
+	setupPlayer(player)
+end
+
+Players.PlayerAdded:Connect(setupPlayer)
+
+-- RANGE LOOP
+task.spawn(function()
+	while true do
+		updateRange()
+		task.wait(0.05)
+	end
+end)
+
+-- ================= UI =================
+
+Tab:CreateToggle({
+	Name = "Auto Block (Animation)",
+	CurrentValue = false,
+	Callback = function(Value)
+		AutoBlock = Value
+	end
+})
+
+Tab:CreateToggle({
+	Name = "Check Killer Looking",
+	CurrentValue = false,
+	Callback = function(Value)
+		CheckLook = Value
+	end
+})
+
+Tab:CreateToggle({
+	Name = "Show Range",
+	CurrentValue = false,
+	Callback = function(Value)
+		ShowRange = Value
+	end
+})
+
+Tab:CreateInput({
+	Name = "Distance",
+	PlaceholderText = "15",
+	RemoveTextAfterFocusLost = false,
+	Callback = function(Value)
+		local num = tonumber(Value)
+		if num then
+			Distance = num
+		end
+	end
+})
+
+Tab:CreateInput({
+	Name = "Delay",
+	PlaceholderText = "0",
+	RemoveTextAfterFocusLost = false,
+	Callback = function(Value)
+		local num = tonumber(Value)
+		if num then
+			Delay = num
+		end
+	end
+})
+
 local Section = Tab:CreateSection("Movement (Jane Doe)")
 
 local Players = game:GetService("Players")
